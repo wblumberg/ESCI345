@@ -95,7 +95,8 @@ def atmo_optical_depth(fbounds=(default_fmin, default_fmax), fnum=1_000, abs_spe
     # the atmospheric properties (temperature, pressure, height, vmr for absorbing gases).
     if type(atmosphere) == pd.DataFrame:
         ws.AtmRawRead(basename=f"{arts_xml_atmospheres}/midlatitude-summer/midlatitude-summer")
-        atmosphere_type = "CUSTOM" 
+        atmosphere_type = "CUSTOM"
+        ws.VectorNLogSpace(ws.p_grid, len(atmosphere['p']), 1013e2, 10000.0)
     elif type(atmosphere) == str:
         # even though we have a custom atmosphere, we need this line to initialize the variables t_field_raw, z_field_raw, and vmr_field_raw.  I'm not sure how to do this otherwise.
         ws.AtmRawRead(basename=f"{arts_xml_atmospheres}/{atmosphere}/{atmosphere}")

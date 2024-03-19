@@ -1,7 +1,7 @@
 import numpy as np
 import pint
 
-ureg = pint.UnitRegistry()
+ureg = pint.get_application_registry()
 
 def planck(wnum, temp):
     c1 = 1.1910427e-5 #mW/m2.sr.cm-1
@@ -17,7 +17,7 @@ def planck_wavelength(wlen, temp):
     return r * ureg.Unit("mW.(m^-2.sr^-1.micrometer)") #mW/m2.sr.cm-1
 
 def brightness_temperature(rad, wnum):
-    wnum = wnum.to('1/cm', 'spectroscopy')
+    #wnum = wnum.to('1/cm', 'spectroscopy')
     c1 = 1.1910427e-5 #mW/m2.sr.cm-1
     c2 = 1.4387752 #K/cm
     temp = (c2 * wnum) / np.log( ((c1 * np.power(wnum,3))/rad) + 1) 
@@ -59,11 +59,11 @@ def rt(wnum, temp, opd, zenith_angle=0, sfc_t=None, sfc_e=None, upwelling=False,
         trans = np.asarray(np.exp(-1. * opd[k,:]), dtype=np.float64) # Compute the transmissivity of the layer
         if upwelling is True:
             # Compute the b_boundary from the bottom layer up
-            b_close = planck(wnum, temp[k])
+            b_close = planck(wnum, temp[k+1])
             layer_to_inst = np.exp(-1. * np.sum(opd[:k,:], axis=0))
         else:
             # Compute the b_boundary from the top of the layer down
-            b_close = planck(wnum, temp[k+1])
+            b_close = planck(wnum, temp[k])
             layer_to_inst = np.exp(-1. * np.sum(opd[k+1:,:], axis=0))
         b_avg = (planck(wnum, temp[k]) + planck(wnum, temp[k+1]))/2. # b_close and b_far
         b_eff = b_close + 2*(b_avg - b_close)*((1./opd[k,:]) - (trans/(1.-trans)))

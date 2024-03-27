@@ -153,13 +153,14 @@ def atmo_optical_depth(fbounds=(default_fmin, default_fmax), fnum=1_000, abs_spe
 
     # Let's specify an FASCODE atmosphere (e.g., tropical, midlatitude-summer, etc.) to set 
     # the atmospheric properties (temperature, pressure, height, vmr for absorbing gases).
-    if type(atmosphere) != 'str':
-        ws.AtmRawRead(basename=f"{arts_xml_atmospheres}/{atmosphere}/{atmosphere}")
-        atmosphere_type = "FASCODE" 
-    elif type(atmosphere) == pd.DataFrame:
-        # even though we have a custom atmosphere, we need this line to initialize the variables t_field_raw, z_field_raw, and vmr_field_raw.  I'm not sure how to do this otherwise.
+    if type(atmosphere) == pd.DataFrame:
         ws.AtmRawRead(basename=f"{arts_xml_atmospheres}/midlatitude-summer/midlatitude-summer")
         atmosphere_type = "CUSTOM"
+        ws.VectorNLogSpace(ws.p_grid, len(atmosphere['p']), 1013e2, 10000.0)
+    elif type(atmosphere) == str:
+        # even though we have a custom atmosphere, we need this line to initialize the variables t_field_raw, z_field_raw, and vmr_field_raw.  I'm not sure how to do this otherwise.
+        ws.AtmRawRead(basename=f"{arts_xml_atmospheres}/{atmosphere}/{atmosphere}")
+        atmosphere_type = "FASCODE"
     else:
         print("Invalid atmosphere specified:", type(atmosphere))
         return
@@ -172,8 +173,10 @@ def atmo_optical_depth(fbounds=(default_fmin, default_fmax), fnum=1_000, abs_spe
     # Now, if we're using a custom atmosphere profile, let's overwrite the profiles in the PyARTS variables.
     if atmosphere_type == "CUSTOM":
         ws.p_grid = atmosphere['p'].to_numpy()
-        ws.t_field = atmosphere['t'].to_numpy()
-        ws.z_field = atmosphere['z'].to_numpy()
+        ws.t_field = atmosphere['t'].to_numpy().reshape((len(atmosphere['p'].to_numpy()),1,1))
+        ws.z_field = atmosphere['z'].to_numpy().reshape((len(atmosphere['p'].to_numpy()),1,1))
+        for i, gas_s in enumerate(abs_species.keys()):
+            ws.vmr_field.value[i] = atmosphere[gas_s].to_numpy().reshape((len(atmosphere['p'].to_numpy()),1,1))
 
     ws.atmfields_checkedCalc() # Check the fields for this atmosphere
     ws.lbl_checkedCalc() # Check to see if we can do a line-by-line calculation

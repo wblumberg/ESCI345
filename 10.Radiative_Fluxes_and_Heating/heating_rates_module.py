@@ -62,12 +62,18 @@ def calc_spectral_irradiance(atmfield,
     ws.cloudboxOff()
 
     # Definition of species
+    #ws.abs_speciesSet(species=[
+    #    "H2O, H2O-SelfContCKDMT400, H2O-ForeignContCKDMT400",
+    #    "CO2, CO2-CKDMT252",
+    #    "O3-*", "N2O-*", "CH4-*", "CO-*"
+    #])
+
     ws.abs_speciesSet(species=[
         "H2O, H2O-SelfContCKDMT400, H2O-ForeignContCKDMT400",
         "CO2, CO2-CKDMT252",
-        "O3-*", "N2O-*", "CH4-*", "CO-*"
+        "O3-*", "CH4-*", "O2-*", "N2O-*"
     ])
-
+    
     # Read line catalog
     ws.abs_lines_per_speciesReadSpeciesSplitCatalog(basename="lines/")
 
@@ -469,31 +475,48 @@ def plot_RRTMG(rrtmg, atmosphere, pressure_limits, hr_limits, flux_limits, net_f
     fig, axs = pplt.subplots(ncols=3, nrows=1, figsize=(12,5), sharex=False, sharey=False)
     fig.format(ylim=pressure_limits, ylabel="Pressure [mb]")
     
-    axs[0].plot(rrtmg.TdotLW.squeeze(), plev[::-1].squeeze()/100., label="LW Heating", color='k')
-    axs[0].plot(rrtmg.TdotSW.squeeze(), plev[::-1].squeeze()/100., label="SW Heating", color='b')
-    axs[0].plot(rrtmg.TdotLW.squeeze() + rrtmg.TdotSW.squeeze(), plev[::-1].squeeze()/100., label="Net Heating", color='r')
+    axs[0].plot(dTdt_LW, dTdt_LW.lev, label="LW Heating", color='k')
+    axs[0].plot(dTdt_SW, dTdt_SW.lev, label="SW Heating", color='b')
+    axs[0].plot(dTdt_SW + dTdt_LW, dTdt_SW.lev, label="Net Heating", color='r')
     
     axs[0].format(yscale='log', yreverse=True, xlabel="Heating Rate [K/day]", 
                   title="Heating/Cooling Rates", xlim=hr_limits)
-    axs[0].axvline(x=0, color='k', alpha=0.8)
+    axs[0].axvline(x=0, color='k', alpha=0.5)
     axs[0].legend(ncols=1, loc='ur')
     axs[0].text(0, -0.2, text1, transform='axes')
     
+    #axs[1].plot(rrtmg.LW_flux_up, LW_flux_up.lev_bounds, label="LW Flux Up", linestyle='--', color='k')
+    #axs[1].plot(-rrtmg.LW_flux_down, LW_flux_down.lev_bounds, label="LW Flux Down", color='k')
+    #axs[1].plot(rrtmg.SW_flux_up, SW_flux_up.lev_bounds, label="SW Flux Up", linestyle='--', color='b')
+    #axs[1].plot(-rrtmg.SW_flux_down, SW_flux_down.lev_bounds, label="SW Flux Down", color='b')
+    #axs[1].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Shortwave/Longwave Fluxes",
+     #            xlim=flux_limits)
+    #axs[1].legend(ncols=1, loc='ur')
+    #axs[1].text(0, -0.2, text2, transform='axes')
     axs[1].plot(rrtmg.LW_flux_up, LW_flux_up.lev_bounds, label="LW Flux Up", linestyle='--', color='k')
-    axs[1].plot(rrtmg.LW_flux_down, LW_flux_down.lev_bounds, label="LW Flux Down", color='k')
-    axs[1].plot(rrtmg.SW_flux_up, SW_flux_up.lev_bounds, label="SW Flux Up", linestyle='--', color='b')
-    axs[1].plot(rrtmg.SW_flux_down, SW_flux_down.lev_bounds, label="SW Flux Down", color='b')
-    axs[1].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Shortwave/Longwave Fluxes",
+    axs[1].plot(-rrtmg.LW_flux_down, LW_flux_down.lev_bounds, label="LW Flux Down", color='k')
+    axs[1].plot(-rrtmg.LW_flux_net, LW_flux_up.lev_bounds, label="LW Net Flux", color='k', linestyle=':')
+    axs[1].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Longwave Fluxes",
                  xlim=flux_limits)
     axs[1].legend(ncols=1, loc='ur')
     axs[1].text(0, -0.2, text2, transform='axes')
+    axs[1].axvline(x=0, color='k', alpha=0.5)
+
     
-    axs[2].plot(rrtmg.LW_flux_net, LW_flux_up.lev_bounds, label="LW $F_{net}$", color='k')
-    axs[2].plot(rrtmg.SW_flux_net, SW_flux_up.lev_bounds, label="SW $F_{net}$", color='b')
-    axs[2].plot(rrtmg.LW_flux_net_clr, LW_flux_up.lev_bounds, label="LW $F_{net}$ Clear", color='k', linestyle=':')
-    axs[2].plot(rrtmg.SW_flux_net_clr, SW_flux_up.lev_bounds, label="SW $F_{net}$ Clear", color='b', linestyle=':')
-    axs[2].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Shortwave/Longwave Net Fluxes",
+    #axs[2].plot(rrtmg.LW_flux_net, LW_flux_up.lev_bounds, label="LW $F_{net}$", color='k')
+    #axs[2].plot(rrtmg.SW_flux_net, SW_flux_up.lev_bounds, label="SW $F_{net}$", color='b')
+    #axs[2].plot(rrtmg.LW_flux_net_clr, LW_flux_up.lev_bounds, label="LW $F_{net}$ Clear", color='k', linestyle=':')
+    #axs[2].plot(rrtmg.SW_flux_net_clr, SW_flux_up.lev_bounds, label="SW $F_{net}$ Clear", color='b', linestyle=':')
+    #axs[2].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Shortwave/Longwave Net Fluxes",
+    #             xlim=net_flux_limits)
+    #axs[2].legend(ncols=1, loc='ur')
+    axs[2].plot(rrtmg.SW_flux_up, SW_flux_up.lev_bounds, label="SW Flux Up", linestyle='--', color='b')
+    axs[2].plot(-rrtmg.SW_flux_down, SW_flux_down.lev_bounds, label="SW Flux Down", color='b')
+    axs[2].plot(-rrtmg.SW_flux_net, SW_flux_up.lev_bounds, label="SW Net Flux", color='b', linestyle=':')
+    axs[2].format(yscale='log', yreverse=True, xlabel="Flux [$W/m^2$]", title="Shortwave Fluxes",
                  xlim=net_flux_limits)
+    axs[2].axvline(x=0, color='k', alpha=0.5)
+
     axs[2].legend(ncols=1, loc='ur')
     axs[2].text(0, -0.2, text3, transform='axes')
     

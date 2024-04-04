@@ -267,7 +267,7 @@ def atmosphere_plotter(atmosphere):
     
     axs[5].plot(atmosphere['t'], atmosphere['p']/100.)
     axs[5].format(yscale='log', yreverse=True, ylabel="Pressure [mb]", xlabel="Temperature [K]",
-                 title="Atmospheric Temperature")
+                 title="Atmospheric Temperature", xlim=(atmosphere['t'].min(), atmosphere['t'].max()))
 
     return fig
 
@@ -288,11 +288,12 @@ def get_rrtmg_params(rrtmg):
               'run_date': rrtmg.creation_date,
               'S0': rrtmg.S0,
               'Ts': rrtmg.Ts[0],
+              'sfc_emis': rrtmg.emissivity,
               'albedo': rrtmg.aldif,
               'coszen': np.degrees(np.arccos(rrtmg.coszen))
               }
     text1 = f"$S_0=${params['S0']} W/m2, $OLR=${params['OLR']:0.2f} W/m2, $ASR=${params['ASR']:0.2f} W/m2"
-    text2 = f"$T_s=${params['Ts']:0.2f} K, $Sfc. Albedo=${params['albedo']:0.2f}, Sun Angle={params['coszen']:0.2f} deg"
+    text2 = f"$T_{{sfc}}=${params['Ts']:0.2f} K, $\epsilon_{{sfc}}=${params['sfc_emis']:0.2f}, $a_{{sfc}}=${params['albedo']:0.2f}, $\phi$={params['coszen']:0.2f} deg"
     text3 = f"RRTMG Run Time: {params['run_date']}"
 
     return params, text1, text2, text3
@@ -326,6 +327,7 @@ def prep_RRTMG_absorbers(atmosphere):
     return absorber_vmr, h2ovmr
 
 def prep_csv4rrtmg(atmosphere):
+    atmosphere = atmosphere.loc[atmosphere['z'] >= 0]
     
     # Pull out the trace gas concentrations, pressure, and temperature
     atmosphere = atmosphere.loc[:,['z', 't', 'p', 'H2O', 'O3', 'N2O', 'O2', 'CO2', 'CH4']]
@@ -353,10 +355,18 @@ def prep_csv4rrtmg(atmosphere):
     atmosphere['LW_Cloud_Tau'] = 0 # In-cloud LW cloud optical depth (tauc_lw)
     atmosphere['LW_Aerosol_Tau'] = 0 # Aerosol LW optical depth (tauaer_lw)
     atmosphere['Cloud_Fraction'] = 0 # Cloud fraction
-
+    atmosphere = atmosphere.reset_index()
+    atmosphere = atmosphere.drop('index', axis=1)
+    
     return atmosphere
 
-def prep_RRTMG_state(atmosphere):
+def get_layer_properties(atmosphere, layer_idx, layer_type="layer"):
+    z_bounds = atmosphere['z'][layer_idx]
+    p_bounds = atmosphere['p'][layer_idx]
+    print(f"The {layer_type} specified is from {z_bounds.min():0.2f}-{z_bounds.max():0.2f} km AGL.") 
+    print(f"The {layer_type} specified is from {p_bounds.max():0.2f}-{z_bounds.min():0.2f} hPa.") 
+
+def prep_RRTMG_state(atmosphere, sfc_temp=None):
     plev = atmosphere['p'].to_numpy()  # pressure bounds
     temperature = atmosphere['t'].to_numpy() # Temperature bounds
     tsfc = temperature[0]
@@ -364,8 +374,11 @@ def prep_RRTMG_state(atmosphere):
     
     # Set up the state variable with our temperatures and pressures.
     state = climlab.column_state(lev=plev.squeeze()/100., num_lat=1) # put the pressure array into the state
-    state['Tatm'] = field.Field(tlev.squeeze(), domain=state['Tatm'].domain) # put temperature array into the state
-    state['Ts'] = field.Field(tlev.squeeze()[0], domain=state['Ts'].domain) # put temperature array into the state
+    state['Tatm'] = field.Field(tlev.squeeze()[::-1], domain=state['Tatm'].domain) # put temperature array into the state
+    if sfc_temp is None:
+        state['Ts'] = field.Field(tlev.squeeze()[0], domain=state['Ts'].domain) # put temperature array into the state
+    else:
+        state['Ts'] = field.Field(sfc_temp, domain=state['Ts'].domain) # put temperature array into the state
 
     return state
 
@@ -450,12 +463,15 @@ def prep_RRTMG_cloud(atmosphere, param=False):
     return mycloud
     
 def prep_RRTMG_aerosol(atmosphere):
-    # Initialize Cloud Properties Arrays
+    # Initialize Aerosol Properties Arrays
     tauaer_sw = abs_species(atmosphere, "SW_Aerosol_Tau")  # SW Aerosol optical depth (iaer=10 only)
     ssaaer_sw = abs_species(atmosphere, "SW_Aerosol_SSA") # SW Aerosol single scattering albedo
     asmaer_sw = abs_species(atmosphere, "SW_Aerosol_Asym") # SW Aerosol Asymmetry Parameter
     tauaer_lw = abs_species(atmosphere, "LW_Aerosol_Tau") # LW Aerosol optical depth
     iaer = 10 # Don't parameterize the radiative properties of the aerosol, use direct RT-relevant variables
+
+    ### if we use iaer=5, we can include the ecmwf aerosols: sea salt, dust, organic and black carbon, and sulphate aerosols
+    ### then, we only have to specify the aerosol optical depth at 550 nm to calculate the aerosol properties.
     
     return {'tauaer_sw': tauaer_sw, 'ssaaer_sw': ssaaer_sw, 'asmaer_sw': asmaer_sw, 'tauaer_lw': tauaer_lw, 'iaer': iaer}
 
@@ -522,7 +538,8 @@ def plot_RRTMG(rrtmg, atmosphere, pressure_limits, hr_limits, flux_limits, net_f
     
     pplt.show()
 
-def plot_OLR_Spectra(rrtmg):
+def plot_OLR_Spectra(rrtmg, planck_curve_temp=286):
+    _, text1, text2, text3 = get_rrtmg_params(rrtmg)
     olr_spectral = rrtmg.OLR_spectral.to_xarray()
     wavenumbers = np.linspace(0.1, 3000) # don't start from zero to avoid divide by zero warnings
     
@@ -541,17 +558,25 @@ def plot_OLR_Spectra(rrtmg):
     def make_planck_curve(ax, T, color='orange'):
         '''Plot the Planck curve (W/m2/cm-1) on the given ax object'''
         ax.plot(wavenumbers, planck_curve(wavenumbers, T),
-                lw=2, color=color, label="Planck Curve, {}K".format(T))
+                lw=2, color=color, label="Planck Curve, {} K".format(T))
     
     def make_rrtmg_spectrum(ax, OLR_spectral, color='blue', alpha=0.5, label='RRTMG - 300K'):
         # Need to normalize RRTMG spectral outputs by width of each wavenumber band
         ax.bar(spectral_centers, np.squeeze(OLR_spectral)/spectral_widths,
                width=spectral_widths, color=color, edgecolor='black', alpha=alpha, label=label)
         
-    fig, axs = plt.subplots(figsize=(7,4))
-    make_rrtmg_spectrum(axs, olr_spectral.to_numpy().squeeze(), label='RRTMG')
-    make_planck_curve(axs, 268, color='orange')
+    fig, axs = plt.subplots(figsize=(8,4))
+    axs.text(.45,.75, text1, transform=axs.transAxes)
+    axs.text(.45,.7, text2, transform=axs.transAxes)
+    axs.text(.45,.65, text3, transform=axs.transAxes)
+
+    make_rrtmg_spectrum(axs, olr_spectral.to_numpy().squeeze(), label='RRTMG_LW')
+    make_planck_curve(axs, planck_curve_temp, color='orange')
     axs.legend(frameon=False)
     axs.set_xlabel("Wavenumber [cm$^{-1}$]")
     axs.set_ylabel("TOA Flux [W/m$^{2}$/cm$^{-1}$]")
+    axs.set_title("Spectral Outgoing Longwave Radiation from RRTMG_LW")
+    print(text3)
+    fig.subplots_adjust(top=0.9)
+    #axs.text(0,-.2, text3, transform=axs.transAxes)
     plt.show()

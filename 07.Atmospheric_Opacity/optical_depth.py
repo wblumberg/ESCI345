@@ -136,7 +136,7 @@ def atmo_optical_depth(fbounds=(default_fmin, default_fmax), fnum=1_000, abs_spe
     ws.abs_cia_dataReadSpeciesSplitCatalog(basename="cia/")
 
     # Read in the HITRAN Experimentally Determine Cross-Section Data (not doing anything with this currently)
-    ws.ReadXsecData(basename="xsec/")
+    # ws.ReadXsecData(basename="xsec/")
     ws.abs_lines_per_speciesTurnOffLineMixing()
 
     # Create our frequency grid

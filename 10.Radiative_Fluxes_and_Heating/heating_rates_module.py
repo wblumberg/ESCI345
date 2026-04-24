@@ -3,7 +3,7 @@ import numpy as np
 import pyarts.workspace
 from typhon import physics as phys
 import matplotlib.pyplot as plt
-import proplot as pplt
+import ultraplot as pplt
 import climlab
 from climlab.domain import field
 
